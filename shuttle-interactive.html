@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Space Shuttle: A Point-and-Click Exploration</title>
+<style>
+  :root{
+    --space:#05070f;
+    --panel:#0d1626;
+    --accent:#4fc3f7;
+    --accent2:#ff7043;
+    --paper:#eef3fa;
+    --brass:#9fd3ef;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:var(--space);
+    color:var(--paper);
+    font-family:'Segoe UI',Arial,sans-serif;
+    overflow:hidden;
+  }
+  #canvasWrap{
+    position:fixed;inset:0;
+  }
+  canvas{display:block;}
+
+  #ui{
+    position:fixed;top:0;left:0;right:0;
+    display:flex;flex-direction:column;align-items:center;
+    pointer-events:none;
+    z-index:10;
+    padding-top:14px;
+  }
+  h1{
+    font-size:clamp(18px,3vw,28px);
+    margin:0 0 2px;
+    letter-spacing:1px;
+    color:var(--accent);
+    text-shadow:0 2px 10px rgba(79,195,247,.5);
+  }
+  .subtitle{
+    font-size:13px;color:#b9c8dc;margin:0 0 10px;text-align:center;max-width:520px;
+  }
+  .progress-wrap{
+    display:flex;align-items:center;gap:10px;
+    background:rgba(13,22,38,.85);
+    border:1px solid #2a3f5f;
+    padding:7px 16px;border-radius:20px;
+    pointer-events:auto;
+  }
+  .progress-bar{
+    width:160px;height:9px;background:#182740;border-radius:6px;overflow:hidden;border:1px solid #2a3f5f;
+  }
+  .progress-fill{
+    height:100%;width:0%;
+    background:linear-gradient(90deg,var(--accent2),var(--accent));
+    transition:width .4s ease;
+  }
+  .progress-text{font-size:12.5px;color:#dce8f7;}
+
+  .hint{
+    position:fixed;bottom:14px;left:0;right:0;
+    text-align:center;font-size:12.5px;color:#93a6c2;
+    pointer-events:none;
+    z-index:10;
+  }
+
+  #loading{
+    position:fixed;inset:0;
+    background:var(--space);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    z-index:100;
+    gap:14px;
+  }
+  #loading .spinner{
+    width:46px;height:46px;border-radius:50%;
+    border:4px solid #1c2c46;border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #loading p{color:#b9c8dc;font-size:14px;}
+
+  /* marker labels */
+  .marker-label{
+    position:absolute;
+    transform:translate(-50%,-140%);
+    background:rgba(13,22,38,.9);
+    border:1px solid var(--accent);
+    color:#eef3fa;
+    padding:4px 9px;
+    border-radius:6px;
+    font-size:12px;
+    white-space:nowrap;
+    pointer-events:none;
+    z-index:5;
+    opacity:0;
+    transition:opacity .15s ease;
+  }
+  .marker-label.show{opacity:1;}
+  .marker-label.visited{border-color:#3fae5c;}
+
+  /* Modal */
+  .overlay{
+    position:fixed;inset:0;
+    background:rgba(2,4,10,.78);
+    display:none;align-items:center;justify-content:center;
+    z-index:50;padding:20px;
+  }
+  .overlay.active{display:flex;}
+  .modal{
+    background:var(--panel);
+    color:var(--paper);
+    max-width:480px;width:100%;
+    border-radius:10px;
+    padding:26px 26px 20px;
+    position:relative;
+    border:1px solid #2a3f5f;
+    box-shadow:0 24px 70px rgba(0,0,0,.6);
+    animation:pop .22s ease;
+  }
+  @keyframes pop{from{transform:scale(.92);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal h2{
+    margin:0 0 4px;font-size:20px;color:var(--accent2);
+    border-bottom:1px solid #2a3f5f;padding-bottom:8px;
+  }
+  .modal .tag{
+    display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--accent);margin-bottom:10px;
+  }
+  .modal p{line-height:1.55;font-size:15px;margin:10px 0;color:#d6e2f0;}
+  .modal .fact{
+    background:#132038;border-left:4px solid var(--accent);
+    padding:8px 12px;font-size:13.5px;margin-top:12px;border-radius:0 4px 4px 0;color:#c8dcf0;
+  }
+  .modal-close{
+    position:absolute;top:10px;right:12px;background:none;border:none;
+    font-size:22px;line-height:1;cursor:pointer;color:#c8dcf0;
+  }
+  .modal-actions{display:flex;justify-content:flex-end;margin-top:16px;}
+  .btn{
+    background:var(--accent2);color:#12100e;border:none;padding:9px 18px;
+    border-radius:5px;cursor:pointer;font-size:14px;font-weight:600;
+  }
+  .btn:hover{background:#ff8a5c;}
+
+  .finale{
+    position:fixed;bottom:60px;left:50%;transform:translateX(-50%);
+    max-width:560px;width:92%;text-align:center;
+    background:rgba(13,22,38,.92);border:1px solid var(--accent);
+    border-radius:10px;padding:16px 22px;
+    display:none;z-index:20;
+  }
+  .finale.show{display:block;animation:pop .3s ease;}
+  .finale h2{color:var(--accent);margin:0 0 6px;font-size:18px;}
+  .finale p{font-size:13px;color:#c8dcf0;margin:4px 0;}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loadingText">Loading Space Shuttle model&hellip;</p>
+</div>
+
+<div id="canvasWrap"></div>
+
+<div id="ui">
+  <h1>Space Shuttle Orbiter</h1>
+  <p class="subtitle">Drag to rotate, scroll to zoom. Click the glowing markers to learn about each part.</p>
+  <div class="progress-wrap">
+    <span class="progress-text">Parts explored:</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <span class="progress-text" id="progressCount">0 / 7</span>
+  </div>
+</div>
+
+<p class="hint">Model: NASA 3D Resources &mdash; Space Shuttle Orbiter exterior</p>
+
+<div class="finale" id="finale">
+  <h2>Mission Complete</h2>
+  <p>The Space Shuttle fleet &mdash; Columbia, Challenger, Discovery, Atlantis, and Endeavour &mdash; flew 135 missions between 1981 and 2011, the only winged, reusable spacecraft to fly to orbit and land like an airplane.</p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <span class="tag" id="modalTag">Component</span>
+    <h2 id="modalTitle">Title</h2>
+    <p id="modalBody">Body</p>
+    <div class="fact" id="modalFact">Fact</div>
+    <div class="modal-actions">
+      <button class="btn" id="modalDone">Got it</button>
+    </div>
+  </div>
+</div>
+
+<script src="model-data.js"></script>
+<script src="earth-data.js"></script>
+<script src="shuttle-bundle.js"></script>
